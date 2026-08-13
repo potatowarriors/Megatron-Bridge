@@ -61,6 +61,18 @@ performance features, so it is not a supported runtime for that recipe.
 - `slurm_pretrain.sh` runs the DeepSeek-V4-Flash pretraining recipes.
 - `slurm_sft.sh` runs DeepSeek-V4-Flash full SFT end to end (import, then fine-tune) on Hopper or Blackwell, with MTP on or off.
 
+The inference script selects the `flex`/HybridEP MoE dispatcher with 16
+dispatcher SMs and unfused HybridEP permutation for both direct-HF and
+Megatron-checkpoint loading. The explicit checkpoint override prevents an older
+serialized `alltoall` setting from restoring the standard dispatcher. Custom
+launchers need a runtime containing the HybridEP package. HybridEP auto-detects
+accessible ranks and fabric support when its topology environment variables are
+unset. To override detection, set
+`NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN`, `NVLINK_DOMAIN_SIZE`, and
+`USE_MNNVL` to values that describe the actual deployment. This selection is
+inference-specific; training recipes retain their independently qualified
+dispatcher defaults.
+
 Run `bash conversion.sh` after setting `WORKSPACE` and `MODEL_VARIANT`. See each script's header comments for the expected environment variables and `#SBATCH` directives to edit before submitting.
 
 ## Pretraining Recipes

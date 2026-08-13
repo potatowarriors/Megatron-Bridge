@@ -557,6 +557,10 @@ class ModelParallelKwargs(TypedDict, total=False):
     hierarchical_context_parallel_sizes: list[int] | None
     pipeline_model_parallel_layout: list[list[str]] | None
     pipeline_dtype: torch.dtype
+    moe_token_dispatcher_type: str
+    moe_flex_dispatcher_backend: str | None
+    moe_flex_dispatcher_num_sms: int | None
+    moe_permute_fusion_into_hybridep: bool
 
 
 def get_model(

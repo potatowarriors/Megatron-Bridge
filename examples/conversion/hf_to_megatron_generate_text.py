@@ -161,6 +161,29 @@ def _decode_completion(tokenizer, generated_ids: torch.Tensor, prompt_length: in
     )
 
 
+def _moe_dispatcher_overrides(args: argparse.Namespace) -> dict[str, str | int | bool]:
+    """Build explicit flex-dispatcher overrides for providers and loaded checkpoints."""
+    if args.moe_flex_dispatcher_backend is None:
+        if args.moe_flex_dispatcher_num_sms is not None or args.hybridep_permute_fusion is not None:
+            raise ValueError(
+                "--moe-flex-dispatcher-num-sms and --[no-]hybridep-permute-fusion require "
+                "--moe-flex-dispatcher-backend"
+            )
+        return {}
+
+    overrides: dict[str, str | int | bool] = {
+        "moe_token_dispatcher_type": "flex",
+        "moe_flex_dispatcher_backend": args.moe_flex_dispatcher_backend,
+    }
+    if args.moe_flex_dispatcher_num_sms is not None:
+        overrides["moe_flex_dispatcher_num_sms"] = args.moe_flex_dispatcher_num_sms
+    if args.hybridep_permute_fusion is not None:
+        if args.moe_flex_dispatcher_backend != "hybridep":
+            raise ValueError("--[no-]hybridep-permute-fusion requires --moe-flex-dispatcher-backend=hybridep")
+        overrides["moe_permute_fusion_into_hybridep"] = args.hybridep_permute_fusion
+    return overrides
+
+
 def main(args) -> None:
     """Main function for text generation from HuggingFace or Megatron models.
 
@@ -177,6 +200,7 @@ def main(args) -> None:
     pp = args.pp
     ep = args.ep
     etp = args.etp
+    dispatcher_overrides = _moe_dispatcher_overrides(args)
 
     # Choose loading method based on arguments
     if args.megatron_model_path:
@@ -201,6 +225,8 @@ def main(args) -> None:
         model_provider.expert_model_parallel_size = ep
         model_provider.expert_tensor_parallel_size = etp
         model_provider.pipeline_dtype = torch.bfloat16
+        for name, value in dispatcher_overrides.items():
+            setattr(model_provider, name, value)
 
         # Read pipeline layout from checkpoint for PP > 1
         if args.pipeline_model_parallel_layout is not None:
@@ -232,6 +258,7 @@ def main(args) -> None:
             "expert_model_parallel_size": ep,
             "expert_tensor_parallel_size": etp,
             "pipeline_dtype": torch.bfloat16,
+            **dispatcher_overrides,
         }
         if args.pipeline_model_parallel_layout is not None:
             mp_overrides["pipeline_model_parallel_layout"] = args.pipeline_model_parallel_layout
@@ -259,6 +286,8 @@ def main(args) -> None:
         model_provider.expert_model_parallel_size = ep
         model_provider.expert_tensor_parallel_size = etp
         model_provider.pipeline_dtype = torch.bfloat16
+        for name, value in dispatcher_overrides.items():
+            setattr(model_provider, name, value)
         if args.pipeline_model_parallel_layout is not None:
             model_provider.pipeline_model_parallel_layout = args.pipeline_model_parallel_layout
 
@@ -425,6 +454,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ep", type=int, default=1, help="Expert parallelism size")
     parser.add_argument("--etp", type=int, default=1, help="Expert tensor parallelism size")
+    parser.add_argument(
+        "--moe-flex-dispatcher-backend",
+        choices=("deepep", "hybridep"),
+        help="Override the MoE token dispatcher with the selected flex backend.",
+    )
+    parser.add_argument(
+        "--moe-flex-dispatcher-num-sms",
+        type=int,
+        help="Number of SMs assigned to the selected flex dispatcher backend.",
+    )
+    parser.add_argument(
+        "--hybridep-permute-fusion",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable HybridEP permutation fusion when HybridEP is selected.",
+    )
     parser.add_argument("--megatron_model_path", type=str, default=None, help="Path to the Megatron model checkpoint")
     parser.add_argument("--trust-remote-code", action="store_true", help="if trust_remote_code")
     return parser

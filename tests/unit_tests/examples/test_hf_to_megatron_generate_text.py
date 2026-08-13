@@ -27,6 +27,7 @@ _build_inference_context = _SCRIPT_GLOBALS["_build_inference_context"]
 _decode_completion = _SCRIPT_GLOBALS["_decode_completion"]
 _hf_revision_kwargs = _SCRIPT_GLOBALS["_hf_revision_kwargs"]
 _maybe_gather_tensor_parallel_logits = _SCRIPT_GLOBALS["_maybe_gather_tensor_parallel_logits"]
+_moe_dispatcher_overrides = _SCRIPT_GLOBALS["_moe_dispatcher_overrides"]
 _run_megatron_forward = _SCRIPT_GLOBALS["_run_megatron_forward"]
 _text_forward_step = _SCRIPT_GLOBALS["text_forward_step"]
 _tokenize_prompt = _SCRIPT_GLOBALS["_tokenize_prompt"]
@@ -105,6 +106,63 @@ def test_legacy_full_prefix_disables_inference_context() -> None:
     assert default_args.legacy_full_prefix is False
     assert legacy_args.legacy_full_prefix is True
     assert _build_inference_context(input_ids, legacy_full_prefix=True) is None
+
+
+@pytest.mark.unit
+def test_hybridep_cli_builds_checkpoint_safe_dispatcher_overrides() -> None:
+    args = _build_parser().parse_args(
+        [
+            "--hf_model_path",
+            "org/model",
+            "--moe-flex-dispatcher-backend",
+            "hybridep",
+            "--moe-flex-dispatcher-num-sms",
+            "16",
+            "--no-hybridep-permute-fusion",
+        ]
+    )
+
+    assert _moe_dispatcher_overrides(args) == {
+        "moe_token_dispatcher_type": "flex",
+        "moe_flex_dispatcher_backend": "hybridep",
+        "moe_flex_dispatcher_num_sms": 16,
+        "moe_permute_fusion_into_hybridep": False,
+    }
+
+
+@pytest.mark.unit
+def test_flex_dispatcher_cli_is_opt_in() -> None:
+    args = _build_parser().parse_args(["--hf_model_path", "org/model"])
+
+    assert _moe_dispatcher_overrides(args) == {}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("option", ["--moe-flex-dispatcher-num-sms", "--no-hybridep-permute-fusion"])
+def test_flex_dispatcher_dependent_options_require_backend(option: str) -> None:
+    command = ["--hf_model_path", "org/model", option]
+    if option == "--moe-flex-dispatcher-num-sms":
+        command.append("16")
+    args = _build_parser().parse_args(command)
+
+    with pytest.raises(ValueError, match="require --moe-flex-dispatcher-backend"):
+        _moe_dispatcher_overrides(args)
+
+
+@pytest.mark.unit
+def test_hybridep_permute_flag_rejects_other_backends() -> None:
+    args = _build_parser().parse_args(
+        [
+            "--hf_model_path",
+            "org/model",
+            "--moe-flex-dispatcher-backend",
+            "deepep",
+            "--no-hybridep-permute-fusion",
+        ]
+    )
+
+    with pytest.raises(ValueError, match="requires --moe-flex-dispatcher-backend=hybridep"):
+        _moe_dispatcher_overrides(args)
 
 
 @pytest.mark.unit

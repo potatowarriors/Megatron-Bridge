@@ -700,6 +700,8 @@ def _load_megatron_model(args):
         model_provider.expert_model_parallel_size = ep
         model_provider.expert_tensor_parallel_size = etp
         model_provider.pipeline_dtype = torch.bfloat16
+        # Inference-only comparison: never require apex's fused grad-accum kernel
+        model_provider.gradient_accumulation_fusion = False
         model_provider.finalize()
         model_provider.initialize_model_parallel(seed=0)
         megatron_model = bridge.load_megatron_model(
@@ -728,6 +730,8 @@ def _load_megatron_model(args):
         model_provider.expert_model_parallel_size = ep
         model_provider.expert_tensor_parallel_size = etp
         model_provider.pipeline_dtype = torch.bfloat16
+        # Inference-only comparison: never require apex's fused grad-accum kernel
+        model_provider.gradient_accumulation_fusion = False
         model_provider.finalize()
         megatron_model = model_provider.provide_distributed_model(wrap_with_ddp=False)
 

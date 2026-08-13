@@ -13,6 +13,9 @@
 # limitations under the License.
 
 # Import model providers for easy access
+from megatron.bridge.models.alpha import (
+    AlphaBridge,
+)
 from megatron.bridge.models.bailing import (
     BailingMoeV2Bridge,
 )
@@ -201,6 +204,7 @@ from megatron.bridge.models.t5_provider import T5ModelProvider
 
 
 __all__ = [
+    "AlphaBridge",
     "AutoBridge",
     "MegatronMappingRegistry",
     "MegatronModelBridge",
